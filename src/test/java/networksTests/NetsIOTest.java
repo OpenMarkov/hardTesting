@@ -10,35 +10,13 @@ package networksTests;
 import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.openmarkov.core.exception.IncompatibleEvidenceException;
-import org.openmarkov.core.exception.InvalidStateException;
-import org.openmarkov.core.exception.NodeNotFoundException;
-import org.openmarkov.core.exception.NotEvaluableNetworkException;
 import org.openmarkov.core.exception.ParserException;
-import org.openmarkov.core.exception.UnexpectedInferenceException;
 import org.openmarkov.core.exception.WriterException;
-import org.openmarkov.core.inference.tasks.CEAnalysis;
+import org.openmarkov.core.inference.InferenceTestsTools;
 import org.openmarkov.core.io.ProbNetInfo;
-import org.openmarkov.core.model.network.Criterion;
 import org.openmarkov.core.model.network.EvidenceCase;
-import org.openmarkov.core.model.network.Finding;
-import org.openmarkov.core.model.network.NodeType;
 import org.openmarkov.core.model.network.ProbNet;
-import org.openmarkov.core.model.network.ProbNetOperations;
-import org.openmarkov.core.model.network.Variable;
-import org.openmarkov.core.model.network.VariableType;
-import org.openmarkov.core.model.network.constraint.OnlyAtemporalVariables;
-import org.openmarkov.core.model.network.potential.TablePotential;
-import org.openmarkov.core.model.network.type.BayesianNetworkType;
-import org.openmarkov.core.model.network.type.InfluenceDiagramType;
-import org.openmarkov.core.model.network.type.MIDType;
 import org.openmarkov.gui.dialog.io.NetsIO;
-import org.openmarkov.inference.variableElimination.tasks.VECEAnalysis;
-import org.openmarkov.inference.variableElimination.tasks.VECEPSA;
-import org.openmarkov.inference.variableElimination.tasks.VEEvaluation;
-import org.openmarkov.inference.variableElimination.tasks.VEOptimalIntervention;
-import org.openmarkov.inference.variableElimination.tasks.VEPropagation;
-import org.openmarkov.inference.variableElimination.tasks.VETemporalEvolution;
 import org.openmarkov.io.probmodel.reader.PGMXReader_0_2;
 import org.openmarkov.io.probmodel.reader.PGMXReader_0_5;
 import org.openmarkov.io.probmodel.writer.PGMXWriter_0_2;
@@ -49,7 +27,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
@@ -257,56 +234,7 @@ public class NetsIOTest {
 				} else {
 					preResolutionEvidence = new EvidenceCase();
 				}
-				if (probNet.getNetworkType().equals(BayesianNetworkType.getUniqueInstance())) {
-					try {
-						testPropagateNetwork(probNet, probNet.getVariables(), preResolutionEvidence);
-					} catch (NotEvaluableNetworkException | IncompatibleEvidenceException | UnexpectedInferenceException e) {
-						e.printStackTrace();
-					}
-				} else if (probNet.getNetworkType().equals(InfluenceDiagramType.getUniqueInstance())) {
-					try {
-						if (probNet.getNodes(NodeType.DECISION).size() > 0) {
-							testResolveNetwork(probNet, preResolutionEvidence, true);
-						} else {
-							testResolveNetwork(probNet, preResolutionEvidence, false);
-						}
-
-						// TODO - Check propagate errors
-						testPropagateNetwork(probNet, probNet.getVariables(), preResolutionEvidence);
-
-						if (hasCostEffectiveness(probNet)) {
-							testCEADecisionNetwork(probNet, preResolutionEvidence);
-							testCEAGlobalNetwork(probNet, preResolutionEvidence);
-							testCEPSANetwork(probNet, preResolutionEvidence, numSimulations, useMultithreading);
-						}
-
-					} catch (NotEvaluableNetworkException | IncompatibleEvidenceException | UnexpectedInferenceException e) {
-						e.printStackTrace();
-					}
-				} else if (probNet.getNetworkType().equals(MIDType.getUniqueInstance())) {
-					try {
-						if (probNet.getNodes(NodeType.DECISION).size() > 0) {
-							testResolveNetwork(probNet, preResolutionEvidence, true);
-						} else {
-							testResolveNetwork(probNet, preResolutionEvidence, false);
-						}
-						// TODO - Check propagate errors
-						testPropagateNetwork(probNet, probNet.getVariables(), preResolutionEvidence);
-
-						if (hasCostEffectiveness(probNet)) {
-							testCEADecisionNetwork(probNet, preResolutionEvidence);
-							testCEAGlobalNetwork(probNet, preResolutionEvidence);
-							testCEPSANetwork(probNet, preResolutionEvidence, numSimulations, useMultithreading);
-						}
-
-						if (!probNet.hasConstraint(OnlyAtemporalVariables.class)) {
-							testTemporalEvolutionNetwork(probNet, preResolutionEvidence);
-						}
-
-					} catch (NotEvaluableNetworkException | IncompatibleEvidenceException | UnexpectedInferenceException e) {
-						e.printStackTrace();
-					}
-				}
+				InferenceTestsTools.testBasicInference(probNet, preResolutionEvidence, numSimulations, useMultithreading);
 
 			} catch (WriterException | FileNotFoundException | ParserException e) {
 				e.printStackTrace();
@@ -318,188 +246,11 @@ public class NetsIOTest {
 		}
 	}
 
-	private boolean hasCostEffectiveness(ProbNet probNet) {
-		boolean hasCost = false;
-		boolean hasEffectiveness = false;
 
-		for (Criterion criterion : probNet.getDecisionCriteria()) {
-			if (criterion.getCECriterion().equals(Criterion.CECriterion.Cost)) {
-				hasCost = true;
-			} else if (criterion.getCECriterion().equals(Criterion.CECriterion.Effectiveness)) {
-				hasEffectiveness = true;
-			}
-		}
-
-		if (hasCost && hasEffectiveness) {
-			return true;
-		} else {
-			return false;
-		}
-
-	}
-
-	private void testCEAGlobalNetwork(ProbNet probNet, EvidenceCase evidenceCase)
-			throws NotEvaluableNetworkException, IncompatibleEvidenceException, UnexpectedInferenceException {
-		CEAnalysis veceaGlobal = new VECEAnalysis(probNet);
-		veceaGlobal.setPreResolutionEvidence(evidenceCase);
-		assertNotNull(veceaGlobal.getUtility());
-		System.out.println("VECEAGlobal successful");
-	}
-
-	private void testCEADecisionNetwork(ProbNet probNet, EvidenceCase evidenceCase)
-			throws NotEvaluableNetworkException, IncompatibleEvidenceException, UnexpectedInferenceException {
-		List<Variable> decisionVariables = probNet.getVariables(NodeType.DECISION);
-
-		for (Variable decisionVariable : decisionVariables) {
-			List<Variable> informationalPredecesors = ProbNetOperations
-					.getInformationalPredecessors(probNet, decisionVariable);
-			informationalPredecesors.remove(decisionVariable);
-
-			for (Variable informationalPredecesor : informationalPredecesors) {
-				// Set the first state as an evidence
-				Finding finding = new Finding(informationalPredecesor, informationalPredecesor.getStates()[0]);
-				try {
-					evidenceCase.addFinding(finding);
-				} catch (InvalidStateException e) {
-					e.printStackTrace();
-				}
-			}
-			CEAnalysis veceaDecision = new VECEAnalysis(probNet);
-			veceaDecision.setPreResolutionEvidence(evidenceCase);
-			veceaDecision.setDecisionVariable(decisionVariable);
-			assertNotNull(veceaDecision.getUtility());
-		}
-		System.out.println("VECEADecision successful");
-	}
-
-	private void testCEPSANetwork(ProbNet probNet, EvidenceCase evidenceCase, int numSimulations,
-			boolean useMultithreading) {
-		List<Variable> decisionVariables = probNet.getVariables(NodeType.DECISION);
-
-		for (Variable decisionVariable : decisionVariables) {
-			List<Variable> informationalPredecesors = ProbNetOperations
-					.getInformationalPredecessors(probNet, decisionVariable);
-			informationalPredecesors.remove(decisionVariable);
-
-			for (Variable informationalPredecesor : informationalPredecesors) {
-				// Set the first state as an evidence
-				Finding finding = new Finding(informationalPredecesor, informationalPredecesor.getStates()[0]);
-				try {
-					evidenceCase.addFinding(finding);
-				} catch (InvalidStateException | IncompatibleEvidenceException e) {
-					e.printStackTrace();
-				}
-			}
-			try {
-				VECEPSA vecepsa = null;
-				vecepsa = new VECEPSA(probNet);
-				vecepsa.setPreResolutionEvidence(evidenceCase);
-				vecepsa.setDecisionVariable(decisionVariable);
-				vecepsa.setNumSimulations(numSimulations);
-				vecepsa.setUseMultithreading(useMultithreading);
-				assertNotNull(vecepsa.getCEPPotentials());
-
-			} catch (NotEvaluableNetworkException | IncompatibleEvidenceException | UnexpectedInferenceException e) {
-				e.printStackTrace();
-			}
-
-		}
-		System.out.println("VECEPSA successful");
-	}
-
-	private void testPropagateNetwork(ProbNet probNet, List<Variable> variables, EvidenceCase evidenceCase)
-			throws NotEvaluableNetworkException, IncompatibleEvidenceException, UnexpectedInferenceException {
-		VEPropagation vePropagation = null;
-		if (!probNet.getNetworkType().equals(BayesianNetworkType.getUniqueInstance())) {
-			VEEvaluation veEvaluation = new VEEvaluation(probNet);
-			vePropagation = new VEPropagation(probNet, veEvaluation.getOptimalPolicies());
-		} else {
-			vePropagation = new VEPropagation(probNet);
-		}
+	
 
 
-		vePropagation.setVariablesOfInterest(variables);
-		vePropagation.setPreResolutionEvidence(evidenceCase);
-		HashMap<Variable, TablePotential> posteriorValues = vePropagation.getPosteriorValues();
-		for (Variable variable : probNet.getVariables()) {
-			if (!variable.getVariableType().equals(VariableType.NUMERIC)) {
-				assertNotNull(posteriorValues.get(variable));
-			}
-		}
-		System.out.println("VEPropagation successful");
-	}
-
-	private void testResolveNetwork(ProbNet probNet, EvidenceCase evidenceCase, Boolean checkStrategy)
-			throws NotEvaluableNetworkException, IncompatibleEvidenceException, UnexpectedInferenceException {
-		VEEvaluation veEvaluation;
-		if (evidenceCase != null) {
-			veEvaluation = new VEEvaluation(probNet);
-			veEvaluation.setPreResolutionEvidence(evidenceCase);
-		} else {
-			veEvaluation = new VEEvaluation(probNet);
-		}
-		veEvaluation.getUtility();
-
-		if (checkStrategy) {
-			VEOptimalIntervention veOptimalStrategy = new VEOptimalIntervention(probNet, evidenceCase);
-			assertNotNull(veOptimalStrategy.getOptimalIntervention());
-		}
-
-		System.out.println("VEResolution successful");
-	}
-
-	private void testTemporalEvolutionNetwork(ProbNet probNet, EvidenceCase evidenceCase)
-			throws NotEvaluableNetworkException, IncompatibleEvidenceException, UnexpectedInferenceException {
-		HashMap<String, Variable> filteredTemporalVariables = new HashMap<>();
-		for (Variable variable : probNet.getVariables()) {
-			if (variable.isTemporal()) {
-				if (!variable.getVariableType().equals(VariableType.NUMERIC)) {
-					Variable oldVariable = filteredTemporalVariables.get(variable.getBaseName());
-					if (oldVariable != null) {
-						if (variable.getTimeSlice() < oldVariable.getTimeSlice()) {
-							filteredTemporalVariables.remove(oldVariable);
-							filteredTemporalVariables.put(variable.getBaseName(), variable);
-						}
-					} else {
-						filteredTemporalVariables.put(variable.getBaseName(), variable);
-					}
-				} else {
-					if (probNet.getNode(variable).getNodeType().equals(NodeType.UTILITY)) {
-						Variable oldVariable = filteredTemporalVariables.get(variable.getBaseName());
-						if (oldVariable != null) {
-							if (variable.getTimeSlice() < oldVariable.getTimeSlice()) {
-								filteredTemporalVariables.remove(oldVariable);
-								filteredTemporalVariables.put(variable.getBaseName(), variable);
-							}
-						} else {
-							filteredTemporalVariables.put(variable.getBaseName(), variable);
-						}
-					}
-				}
-			}
-		}
-
-		for (Variable variable : filteredTemporalVariables.values()) {
-
-			VETemporalEvolution veTemporalEvolution = new VETemporalEvolution(probNet, variable);
-			veTemporalEvolution.setPreResolutionEvidence(evidenceCase);
-			ProbNet expandedNetwork = veTemporalEvolution.getExpandedNetwork();
-			assertNotNull(veTemporalEvolution.getTemporalEvolution());
-			for (int i = variable.getTimeSlice();
-                 i < expandedNetwork.getInferenceOptions().getTemporalOptions().getHorizon(); i++) {
-				try {
-					Variable variableInSlicei = expandedNetwork.getVariable(variable.getBaseName(), i);
-					assertNotNull(veTemporalEvolution.getTemporalEvolution().get(variableInSlicei));
-				} catch (NodeNotFoundException e) {
-					e.printStackTrace();
-				}
-
-			}
-
-		}
-
-		System.out.println("VETemporalEvolution successful");
-	}
+	
 
 	@Test
 	public void testPGMX_0_2vs0_5 () throws IOException, WriterException, ParserException {
