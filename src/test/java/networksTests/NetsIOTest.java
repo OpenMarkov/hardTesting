@@ -7,6 +7,7 @@
 
 package networksTests;
 
+import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmarkov.core.exception.IncompatibleEvidenceException;
@@ -39,7 +40,9 @@ import org.openmarkov.inference.variableElimination.tasks.VEOptimalIntervention;
 import org.openmarkov.inference.variableElimination.tasks.VEPropagation;
 import org.openmarkov.inference.variableElimination.tasks.VETemporalEvolution;
 import org.openmarkov.io.probmodel.reader.PGMXReader_0_2;
+import org.openmarkov.io.probmodel.reader.PGMXReader_0_5;
 import org.openmarkov.io.probmodel.writer.PGMXWriter_0_2;
+import org.openmarkov.io.probmodel.writer.PGMXWriter_0_5;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -205,6 +208,8 @@ public class NetsIOTest {
 		openSaveNetwork("Net2.elv", "Net2Saved.elv");
 
 	}
+
+
 
 	@Test public final void testOpenSaveRepositoryNets() {
 		NetsRepository repository = new NetsRepository();
@@ -494,5 +499,49 @@ public class NetsIOTest {
 		}
 
 		System.out.println("VETemporalEvolution successful");
+	}
+
+	@Test
+	public void testPGMX_0_2vs0_5 () throws IOException, WriterException, ParserException {
+		NetsRepository repository = new NetsRepository();
+		List<URL> listURL = repository.getNetworks();
+
+		for (URL url : listURL) {
+			// The name is irrelevant because this nets will only be created for tests purposes and it will be deleted
+			// after each iteration
+			String networkName = url.getPath();
+			networkName = networkName.substring(networkName.lastIndexOf("/") + 1, networkName.length());
+
+			if (skippedNetworkNames.contains(networkName)) {
+				continue;
+			}
+
+			// Load probNet in 0_2
+			PGMXReader_0_2 pgmxReader_0_2 = new PGMXReader_0_2();
+			ProbNetInfo probNetInfo_0_2 = pgmxReader_0_2.loadProbNetInfo(networkName, url.openStream());
+			ProbNet probNet_0_2 = probNetInfo_0_2.getProbNet();
+			List<EvidenceCase> evidenceCase_0_2 = probNetInfo_0_2.getEvidence();
+			Assert.assertNotNull(probNet_0_2);
+			Assert.assertNotNull(evidenceCase_0_2);
+
+			// Write probNet in 0_5 version and check integrity
+			PGMXWriter_0_5 pgmxWritter = new PGMXWriter_0_5();
+			pgmxWritter.writeProbNet(networkName, probNet_0_2, evidenceCase_0_2);
+
+			// Re-open netwokr in 0_5
+			FileInputStream file = new FileInputStream(networkName);
+			PGMXReader_0_5 pgmxReader_0_5 = new PGMXReader_0_5();
+			ProbNetInfo probNetInfo_0_5 = pgmxReader_0_5.loadProbNetInfo(networkName, file);
+			ProbNet probNet_0_5 = probNetInfo_0_5.getProbNet();
+			List<EvidenceCase> evidenceCase_0_5 = probNetInfo_0_5.getEvidence();
+			Assert.assertNotNull(probNet_0_5);
+			Assert.assertNotNull(evidenceCase_0_5);
+
+			for (int i = 0; i < evidenceCase_0_2.size(); i++) {
+				Assert.assertEquals(evidenceCase_0_2.get(0).getNumberOfFindings(), evidenceCase_0_5.get(0).getNumberOfFindings());
+			}
+		}
+
+
 	}
 }
