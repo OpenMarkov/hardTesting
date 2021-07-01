@@ -18,9 +18,9 @@ import org.openmarkov.core.model.network.EvidenceCase;
 import org.openmarkov.core.model.network.ProbNet;
 import org.openmarkov.gui.dialog.io.NetsIO;
 import org.openmarkov.io.probmodel.reader.PGMXReader_0_2;
-import org.openmarkov.io.probmodel.reader.PGMXReader_0_5;
+import org.openmarkov.io.probmodel.reader.PGMXReader_1_0;
 import org.openmarkov.io.probmodel.writer.PGMXWriter_0_2;
-import org.openmarkov.io.probmodel.writer.PGMXWriter_0_5;
+import org.openmarkov.io.probmodel.writer.PGMXWriter_1_0;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -276,12 +276,12 @@ public class NetsIOTest {
 			Assert.assertNotNull(evidenceCase_0_2);
 
 			// Write probNet in 0_5 version and check integrity
-			PGMXWriter_0_5 pgmxWritter = new PGMXWriter_0_5();
+			PGMXWriter_1_0 pgmxWritter = new PGMXWriter_1_0();
 			pgmxWritter.writeProbNet(networkName, probNet_0_2, evidenceCase_0_2);
 
 			// Re-open netwokr in 0_5
 			FileInputStream file = new FileInputStream(networkName);
-			PGMXReader_0_5 pgmxReader_0_5 = new PGMXReader_0_5();
+			PGMXReader_1_0 pgmxReader_0_5 = new PGMXReader_1_0();
 			ProbNetInfo probNetInfo_0_5 = pgmxReader_0_5.loadProbNetInfo(networkName, file);
 			ProbNet probNet_0_5 = probNetInfo_0_5.getProbNet();
 			List<EvidenceCase> evidenceCase_0_5 = probNetInfo_0_5.getEvidence();
