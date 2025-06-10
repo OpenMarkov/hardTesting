@@ -13,6 +13,5 @@ public class HardTesting {
 
 	public static void main(String[] args) {
 		OpenMarkov.main(args);
-
 	}
 }

@@ -10,22 +10,19 @@
         <version>0.3.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>org.openmarkov</groupId>
     <artifactId>org.openmarkov.hardTesting</artifactId>
     <version>0.3.0-SNAPSHOT</version>
 
     <dependencies>
-    <dependency>
+        <dependency>
             <groupId>org.openmarkov</groupId>
             <artifactId>org.openmarkov.full</artifactId>
             <version>0.3.0-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.openmarkov</groupId>
-            <artifactId>org.openmarkov.full</artifactId>
+            <artifactId>org.openmarkov.integrationTests</artifactId>
             <version>0.3.0-SNAPSHOT</version>
-            <type>test-jar</type>
-  		<scope>test</scope>
         </dependency>
     </dependencies>
 </project>
