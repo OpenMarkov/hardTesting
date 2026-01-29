@@ -7,14 +7,10 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.openmarkov.core.exception.IncompatibleEvidenceException;
-import org.openmarkov.core.exception.NotEvaluableNetworkException;
-import org.openmarkov.core.exception.ParserException;
-import org.openmarkov.core.exception.UnexpectedInferenceException;
 import org.openmarkov.core.io.ProbNetInfo;
 import org.openmarkov.core.model.network.CEP;
 import org.openmarkov.core.model.network.Criterion;
@@ -34,7 +30,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -43,6 +38,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
 
 @TestInstance(TestInstance.Lifecycle.PER_METHOD)
 public class InferenceTimeCEA {
@@ -53,7 +49,7 @@ public class InferenceTimeCEA {
     private final double lambda = 30000;
     private List<AnalysisResult> results = new ArrayList<>();
     
-    static Stream<ProbNetContents> networksToTest() throws ParserException {
+    static Stream<ProbNetContents> networksToTest() throws Exception {
         PGMXReader_0_2 pgmxReader = new PGMXReader_0_2();
         var networkNames = List.of(
                 // New cost-effectiveness networks
@@ -89,16 +85,13 @@ public class InferenceTimeCEA {
     
     @ParameterizedTest
     @MethodSource("networksToTest")
-    public void dansTEST(ProbNetContents networkContents) throws NotEvaluableNetworkException, IncompatibleEvidenceException, UnexpectedInferenceException, ParserException, IOException {
+    public void dansTEST(ProbNetContents networkContents) throws Exception {
         ProbNetInfo probNetInfo = networkContents.probNetInfo;
         ProbNet probNet = networkContents.probNet;
         
         EvidenceCase evidenceCase = probNetInfo.getEvidence().isEmpty() ?
                 new EvidenceCase() :
                 probNetInfo.getEvidence().get(0);
-        
-        AnalysisResult result = new AnalysisResult();
-        result.setNetworkName(probNet.getName());
         
         for (Criterion criterion : probNet.getDecisionCriteria()) {
             LogManager.getLogger()
@@ -113,17 +106,16 @@ public class InferenceTimeCEA {
                 probNet, evidenceCase);
         TablePotential utilityDSD = evaluationDSD.getUtility();
         long endTime = System.nanoTime();
-        result.setDsdUNIEvaluationTime(endTime - startTime);
-        result.setDsdUNIResult(utilityDSD);
-        evaluationDSD = null;
+        
+        long dsdUNIEvaluationTime = endTime - startTime;
         
         LogManager.getLogger().debug("DT for " + probNet.getName());
         startTime = System.nanoTime();
         DANDecisionTreeEvaluation evaluationDT = new DANDecisionTreeEvaluation(probNet, evidenceCase);
         TablePotential utilityDT = evaluationDT.getUtility();
         endTime = System.nanoTime();
-        result.setDtUNIEvaluationTime(endTime - startTime);
-        result.setDtUNIResult(utilityDT);
+        
+        long dtUNIEvaluationTime = endTime - startTime;
         evaluationDT = null;
         
         // Check that the result of both unicriterion algorithms are the same
@@ -136,8 +128,8 @@ public class InferenceTimeCEA {
                 probNet, evidenceCase);
         CEP cepDSD = evaluationCEADSD.getCEP();
         endTime = System.nanoTime();
-        result.setDsdCEEvaluationTime(endTime - startTime);
-        result.setDsdCEResult(cepDSD);
+        
+        long dsdCEEvaluationTime = endTime - startTime;
         evaluationCEADSD = null;
         
         LogManager.getLogger().debug("CEA_DT with lambda = " + lambda);
@@ -145,8 +137,20 @@ public class InferenceTimeCEA {
         DANDecisionTreeCEA evaluationCEADT = new DANDecisionTreeCEA(probNet);
         CEP cepDT = evaluationCEADT.getCEP();
         endTime = System.nanoTime();
-        result.setDtCEEvaluationTime(endTime - startTime);
-        result.setDtCEResult(cepDT);
+        
+        long dtCEEvaluationTime = endTime - startTime;
+        
+        AnalysisResult result = new AnalysisResult(
+                dsdCEEvaluationTime,
+                dtCEEvaluationTime,
+                dsdUNIEvaluationTime,
+                dtUNIEvaluationTime,
+                probNet.getName(),
+                cepDSD,
+                cepDT,
+                utilityDSD,
+                utilityDT
+        );
         evaluationCEADT = null;
         
         // Check that the result of both CE algorithms are the same
@@ -166,9 +170,9 @@ public class InferenceTimeCEA {
                 "cepDTEffectivities: " + Arrays.toString(cepDTEffectivities) + System.lineSeparator() +
                 "expected result: " + utilityDSD.values[0] + System.lineSeparator() +
                 "actual result:" + ceAlgorithmsResults;
-        try{
-            Files.write(Path.of("DAN Test - Raw Result for "+probNet.getName()+".txt"), rawResult.getBytes());
-        }catch (IOException ignored){
+        try {
+            Files.write(Path.of("DAN Test - Raw Result for " + probNet.getName() + ".txt"), rawResult.getBytes());
+        } catch (IOException ignored) {
         }
         
         assertArrayEquals(cepDSDThresholds, cepDTThresholds, deltaEquals);
@@ -181,140 +185,135 @@ public class InferenceTimeCEA {
         
     }
     
-    @Test public void checkCEPThresholdsWithUnicreterionAnalysis() throws ParserException {
+    @ParameterizedTest
+    @MethodSource("networksToTest")
+    public void checkCEPThresholdsWithUnicreterionAnalysis(ProbNetContents networkContents) throws Exception {
         double precision = Math.pow(10, 4);
-        for (ProbNetContents networkContents : networksToTest().toList()) {
-            try {
-                ProbNetInfo probNetInfo = networkContents.probNetInfo;
-                ProbNet probNet = networkContents.probNet;
-                String networkName = probNet.getName();
-                EvidenceCase evidenceCase = probNetInfo.getEvidence().isEmpty() ?
-                        new EvidenceCase() :
-                        probNetInfo.getEvidence().get(0);
-                
-                /**
-                 * If multicriteria
-                 */
-                boolean isMulticriteria = false;
-                if (probNet.getDecisionCriteria().size() > 1) {
-                    isMulticriteria = true;
-                    for (Criterion criterion : probNet.getDecisionCriteria()) {
-                        if (criterion.getCECriterion() == Criterion.CECriterion.Effectiveness) {
-                            // Set effectiveness scale to lambda
-                            probNet.getDecisionCriteria().get(1).setUnicriterizationScale(lambda);
-                        }
-                    }
+        ProbNetInfo probNetInfo = networkContents.probNetInfo;
+        ProbNet probNet = networkContents.probNet;
+        String networkName = probNet.getName();
+        EvidenceCase evidenceCase = probNetInfo.getEvidence().isEmpty() ?
+                new EvidenceCase() :
+                probNetInfo.getEvidence().get(0);
+        
+        /**
+         * If multicriteria
+         */
+        boolean isMulticriteria = false;
+        if (probNet.getDecisionCriteria().size() > 1) {
+            isMulticriteria = true;
+            for (Criterion criterion : probNet.getDecisionCriteria()) {
+                if (criterion.getCECriterion() == Criterion.CECriterion.Effectiveness) {
+                    // Set effectiveness scale to lambda
+                    probNet.getDecisionCriteria().get(1).setUnicriterizationScale(lambda);
                 }
-                
-                TablePotential utilityDSD;
-                TablePotential utilityDT;
-                
-                for (Criterion criterion : probNet.getDecisionCriteria()) {
-                    LogManager.getLogger()
-                              .debug(criterion.getCriterionName() + " scale = (x " + criterion.getUnicriterizationScale()
-                                             + ")");
-                }
-                
-                // COST-EFFECTIVENESS ANALYSIS
-                LogManager.getLogger().debug("CEA_DSD for " + probNet.getName());
-                DANDecompositionIntoSymmetricDANsCEA evaluationCEADSD = new DANDecompositionIntoSymmetricDANsCEA(
-                        probNet, evidenceCase);
-                CEP cepDSD = evaluationCEADSD.getCEP();
-                evaluationCEADSD = null;
-                
-                LogManager.getLogger().debug("CEA_DT for " + probNet.getName());
-                DANDecisionTreeCEA evaluationCEADT = new DANDecisionTreeCEA(probNet);
-                CEP cepDT = evaluationCEADT.getCEP();
-                evaluationCEADT = null;
-                
-                // Check that the result of both CE algorithms are the same
-                try {
-                    assertArrayEquals(cepDSD.getThresholds(), cepDT.getThresholds(), deltaEquals);
-                    assertArrayEquals(cepDSD.getCosts(), cepDT.getCosts(), deltaEquals);
-                    assertArrayEquals(cepDSD.getEffectivities(), cepDT.getEffectivities(), deltaEquals);
-                } catch (AssertionError error) {
-                    LogManager.getLogger()
-                              .error("CEPs are different, analyzing with unicriterion analysis. " + error.getMessage());
-                    
-                    List<Double> allThresholds = new ArrayList<>();
-                    LogManager.getLogger().debug("DSD thresholds");
-                    String loggerThresholds = "";
-                    for (double threshold : cepDSD.getThresholds()) {
-                        allThresholds.add(threshold);
-                        loggerThresholds += threshold + "\t";
-                    }
-                    LogManager.getLogger().debug(loggerThresholds);
-                    
-                    LogManager.getLogger().debug("DT thresholds");
-                    loggerThresholds = "";
-                    for (double threshold : cepDT.getThresholds()) {
-                        allThresholds.add(threshold);
-                        loggerThresholds += threshold + "\t";
-                    }
-                    LogManager.getLogger().debug(loggerThresholds);
-                    
-                    allThresholds = new ArrayList<>(new HashSet<>(allThresholds));
-                    Collections.sort(allThresholds);
-                    
-                    LogManager.getLogger()
-                              .debug("Threshold \t DSD Unicriterion \t DT Unicriterion \t DSD Cost \t DT Cost \t DSD Effectiveness \t DT Effectiveness");
-                    for (double lambda : allThresholds) {
+            }
+        }
+        
+        TablePotential utilityDSD;
+        TablePotential utilityDT;
+        
+        for (Criterion criterion : probNet.getDecisionCriteria()) {
+            LogManager.getLogger()
+                      .debug(criterion.getCriterionName() + " scale = (x " + criterion.getUnicriterizationScale()
+                                     + ")");
+        }
+        
+        // COST-EFFECTIVENESS ANALYSIS
+        LogManager.getLogger().debug("CEA_DSD for " + probNet.getName());
+        DANDecompositionIntoSymmetricDANsCEA evaluationCEADSD = new DANDecompositionIntoSymmetricDANsCEA(
+                probNet, evidenceCase);
+        CEP cepDSD = evaluationCEADSD.getCEP();
+        evaluationCEADSD = null;
+        
+        LogManager.getLogger().debug("CEA_DT for " + probNet.getName());
+        DANDecisionTreeCEA evaluationCEADT = new DANDecisionTreeCEA(probNet);
+        CEP cepDT = evaluationCEADT.getCEP();
+        evaluationCEADT = null;
+        
+        // Check that the result of both CE algorithms are the same
+        try {
+            assertArrayEquals(cepDSD.getThresholds(), cepDT.getThresholds(), deltaEquals);
+            assertArrayEquals(cepDSD.getCosts(), cepDT.getCosts(), deltaEquals);
+            assertArrayEquals(cepDSD.getEffectivities(), cepDT.getEffectivities(), deltaEquals);
+        } catch (AssertionError error) {
+            LogManager.getLogger()
+                      .error("CEPs are different, analyzing with unicriterion analysis. " + error.getMessage());
+            
+            List<Double> allThresholds = new ArrayList<>();
+            LogManager.getLogger().debug("DSD thresholds");
+            String loggerThresholds = "";
+            for (double threshold : cepDSD.getThresholds()) {
+                allThresholds.add(threshold);
+                loggerThresholds += threshold + "\t";
+            }
+            LogManager.getLogger().debug(loggerThresholds);
+            
+            LogManager.getLogger().debug("DT thresholds");
+            loggerThresholds = "";
+            for (double threshold : cepDT.getThresholds()) {
+                allThresholds.add(threshold);
+                loggerThresholds += threshold + "\t";
+            }
+            LogManager.getLogger().debug(loggerThresholds);
+            
+            allThresholds = new ArrayList<>(new HashSet<>(allThresholds));
+            Collections.sort(allThresholds);
+            
+            LogManager.getLogger()
+                      .debug("Threshold \t DSD Unicriterion \t DT Unicriterion \t DSD Cost \t DT Cost \t DSD Effectiveness \t DT Effectiveness");
+            for (double lambda : allThresholds) {
 //                        // Set effectiveness scale to lambda - 1
 //                        probNet.getDecisionCriteria().get(1).setUnicriterizationScale(lambda);
-                        
-                        // UNICRITERION ANALYSIS
-                        DANDecompositionIntoSymmetricDANsEvaluation evaluationDSD = new DANDecompositionIntoSymmetricDANsEvaluation(
-                                probNet, evidenceCase);
-                        utilityDSD = evaluationDSD.getUtility();
-                        evaluationDSD = null;
-                        
-                        DANDecisionTreeEvaluation evaluationDT = new DANDecisionTreeEvaluation(probNet, evidenceCase);
-                        utilityDT = evaluationDT.getUtility();
-                        evaluationDT = null;
-                        
-                        LogManager.getLogger().debug(
-                                lambda + "\t"
-                                        + utilityDSD + "\t"
-                                        + utilityDT + "\t"
-                                        + cepDSD.getCost(lambda) + "\t"
-                                        + cepDT.getCost(lambda) + "\t"
-                                        + cepDSD.getEffectiveness(lambda) + "\t"
-                                        + cepDT.getEffectiveness(lambda));
+                
+                // UNICRITERION ANALYSIS
+                DANDecompositionIntoSymmetricDANsEvaluation evaluationDSD = new DANDecompositionIntoSymmetricDANsEvaluation(
+                        probNet, evidenceCase);
+                utilityDSD = evaluationDSD.getUtility();
+                evaluationDSD = null;
+                
+                DANDecisionTreeEvaluation evaluationDT = new DANDecisionTreeEvaluation(probNet, evidenceCase);
+                utilityDT = evaluationDT.getUtility();
+                evaluationDT = null;
+                
+                LogManager.getLogger().debug(
+                        lambda + "\t"
+                                + utilityDSD + "\t"
+                                + utilityDT + "\t"
+                                + cepDSD.getCost(lambda) + "\t"
+                                + cepDT.getCost(lambda) + "\t"
+                                + cepDSD.getEffectiveness(lambda) + "\t"
+                                + cepDT.getEffectiveness(lambda));
 //                        LogManager.getLogger().debug(utilityDSD);
 //                        LogManager.getLogger().debug(utilityDT);
 //                        LogManager.getLogger().debug(cepDSD.getCost(lambda));
 //                        LogManager.getLogger().debug(cepDT.getCost(lambda));
 //                        LogManager.getLogger().debug(cepDSD.getEffectiveness(lambda));
 //                        LogManager.getLogger().debug(cepDT.getEffectiveness(lambda));
-                        
-                        try {
-                            // Check that the result of both unicriterion algorithms are the same
-                            assertArrayEquals(utilityDSD.values, utilityDT.values, deltaEquals);
-                        } catch (AssertionError err) {
-                            LogManager.getLogger()
-                                      .error("Unicriterion utilities are different for lambda = " + lambda + ". " + err
-                                              .getMessage());
-                        }
-                        
-                        try {
-                            // Check that the result obtained for CE algorithms and Unicriterion algorithms are the same
-                            assertEquals(utilityDSD.values[0], cepDSD.getEffectiveness(lambda) * lambda - cepDSD.getCost(lambda), deltaEquals);
-                        } catch (AssertionError err) {
-                            LogManager.getLogger()
-                                      .error("DSD CEP are not equal to unicriterion case for lambda = " + lambda + ". " + err.getMessage());
-                        }
-                        
-                        try {
-                            assertEquals(utilityDSD.values[0], cepDT.getEffectiveness(lambda) * lambda - cepDT.getCost(lambda), deltaEquals);
-                        } catch (AssertionError err) {
-                            LogManager.getLogger()
-                                      .error("DT CEP are not equal to unicriterion case for lambda = " + lambda + ". " + err.getMessage());
-                        }
-                    }
+                
+                try {
+                    // Check that the result of both unicriterion algorithms are the same
+                    assertArrayEquals(utilityDSD.values, utilityDT.values, deltaEquals);
+                } catch (AssertionError err) {
+                    LogManager.getLogger()
+                              .error("Unicriterion utilities are different for lambda = " + lambda + ". " + err
+                                      .getMessage());
                 }
-            } catch (UnexpectedInferenceException | NotEvaluableNetworkException |
-                     IncompatibleEvidenceException e) {
-                e.printStackTrace();
+                
+                try {
+                    // Check that the result obtained for CE algorithms and Unicriterion algorithms are the same
+                    assertEquals(utilityDSD.values[0], cepDSD.getEffectiveness(lambda) * lambda - cepDSD.getCost(lambda), deltaEquals);
+                } catch (AssertionError err) {
+                    LogManager.getLogger()
+                              .error("DSD CEP are not equal to unicriterion case for lambda = " + lambda + ". " + err.getMessage());
+                }
+                
+                try {
+                    assertEquals(utilityDSD.values[0], cepDT.getEffectiveness(lambda) * lambda - cepDT.getCost(lambda), deltaEquals);
+                } catch (AssertionError err) {
+                    LogManager.getLogger()
+                              .error("DT CEP are not equal to unicriterion case for lambda = " + lambda + ". " + err.getMessage());
+                }
             }
         }
     }
@@ -394,11 +393,11 @@ public class InferenceTimeCEA {
         rowNumber++;
         for (AnalysisResult result : results) {
             row = sheet.createRow(rowNumber);
-            row.createCell(0).setCellValue(result.getNetworkName());
-            row.createCell(1).setCellValue(result.getDsdUNIEvaluationTime());
-            row.createCell(2).setCellValue(result.getDtUNIEvaluationTime());
-            row.createCell(3).setCellValue(result.getDsdCEEvaluationTime());
-            row.createCell(4).setCellValue(result.getDtCEEvaluationTime());
+            row.createCell(0).setCellValue(result.networkName());
+            row.createCell(1).setCellValue(result.dsdUNIEvaluationTime());
+            row.createCell(2).setCellValue(result.dtUNIEvaluationTime());
+            row.createCell(3).setCellValue(result.dsdCEEvaluationTime());
+            row.createCell(4).setCellValue(result.dtCEEvaluationTime());
             rowNumber++;
         }
         
@@ -414,88 +413,19 @@ public class InferenceTimeCEA {
     /**
      * Class to store the analysis made for each network
      */
-    private static class AnalysisResult {
-        private long dsdCEEvaluationTime;
-        private long dtCEEvaluationTime;
-        private long dsdUNIEvaluationTime;
-        private long dtUNIEvaluationTime;
-        private String networkName;
-        
-        private CEP dsdCEResult;
-        private CEP dtCEResult;
-        private TablePotential dsdUNIResult;
-        private TablePotential dtUNIResult;
-        
-        public long getDsdCEEvaluationTime() {
-            return dsdCEEvaluationTime;
-        }
-        
-        public void setDsdCEEvaluationTime(long dsdCEEvaluationTime) {
-            this.dsdCEEvaluationTime = dsdCEEvaluationTime;
-        }
-        
-        public long getDtCEEvaluationTime() {
-            return dtCEEvaluationTime;
-        }
-        
-        public void setDtCEEvaluationTime(long dtCEEvaluationTime) {
-            this.dtCEEvaluationTime = dtCEEvaluationTime;
-        }
-        
-        public long getDsdUNIEvaluationTime() {
-            return dsdUNIEvaluationTime;
-        }
-        
-        public void setDsdUNIEvaluationTime(long dsdUNIEvaluationTime) {
-            this.dsdUNIEvaluationTime = dsdUNIEvaluationTime;
-        }
-        
-        public long getDtUNIEvaluationTime() {
-            return dtUNIEvaluationTime;
-        }
-        
-        public void setDtUNIEvaluationTime(long dtUNIEvaluationTime) {
-            this.dtUNIEvaluationTime = dtUNIEvaluationTime;
-        }
-        
-        public String getNetworkName() {
-            return networkName;
-        }
-        
-        public void setNetworkName(String networkName) {
-            this.networkName = networkName;
-        }
-        
-        public CEP getDsdCEResult() {
-            return dsdCEResult;
-        }
-        
-        public void setDsdCEResult(CEP dsdCEResult) {
-            this.dsdCEResult = dsdCEResult;
-        }
-        
-        public CEP getDtCEResult() {
-            return dtCEResult;
-        }
-        
-        public void setDtCEResult(CEP dtCEResult) {
-            this.dtCEResult = dtCEResult;
-        }
-        
-        public TablePotential getDsdUNIResult() {
-            return dsdUNIResult;
-        }
-        
-        public void setDsdUNIResult(TablePotential dsdUNIResult) {
-            this.dsdUNIResult = dsdUNIResult;
-        }
-        
-        public TablePotential getDtUNIResult() {
-            return dtUNIResult;
-        }
-        
-        public void setDtUNIResult(TablePotential dtUNIResult) {
-            this.dtUNIResult = dtUNIResult;
-        }
+    record AnalysisResult(
+            long dsdCEEvaluationTime,
+            long dtCEEvaluationTime,
+            long dsdUNIEvaluationTime,
+            long dtUNIEvaluationTime,
+            String networkName,
+            
+            CEP dsdCEResult,
+            CEP dtCEResult,
+            TablePotential dsdUNIResult,
+            TablePotential dtUNIResult
+    ) {
+    
     }
+    
 }
