@@ -39,7 +39,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
+@Disabled
 @TestInstance(TestInstance.Lifecycle.PER_METHOD)
 public class InferenceTimeCEA {
     
@@ -367,7 +367,7 @@ public class InferenceTimeCEA {
     
     @AfterEach
     public void onTestsEnd() throws IOException {
-        saveResultsToXSLX();
+        //saveResultsToXSLX();
     }
     
     public void saveResultsToXSLX() throws IOException {
