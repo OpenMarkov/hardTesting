@@ -119,7 +119,7 @@ public class InferenceTimeCEA {
         evaluationDT = null;
         
         // Check that the result of both unicriterion algorithms are the same
-        assertArrayEquals(utilityDSD.values, utilityDT.values, deltaEquals);
+        assertArrayEquals(utilityDSD.getValues(), utilityDT.getValues(), deltaEquals);
         
         // COST-EFFECTIVENESS ANALYSIS
         LogManager.getLogger().debug("CEA_DSD with lambda = " + lambda);
@@ -168,7 +168,7 @@ public class InferenceTimeCEA {
                 "cepDTCosts: " + Arrays.toString(cepDTCosts) + System.lineSeparator() +
                 "cepDSDEffectivities: " + Arrays.toString(cepDSDEffectivities) + System.lineSeparator() +
                 "cepDTEffectivities: " + Arrays.toString(cepDTEffectivities) + System.lineSeparator() +
-                "expected result: " + utilityDSD.values[0] + System.lineSeparator() +
+                "expected result: " + utilityDSD.getValues()[0] + System.lineSeparator() +
                 "actual result:" + ceAlgorithmsResults;
         try {
             Files.write(Path.of("DAN Test - Raw Result for " + probNet.getName() + ".txt"), rawResult.getBytes());
@@ -180,7 +180,7 @@ public class InferenceTimeCEA {
         assertArrayEquals(cepDSDEffectivities, cepDTEffectivities, deltaEquals);
         
         // Check that the result obtained for CE algorithms (lambda=30,000) and Unicriterion algorithms are the same
-        assertEquals(utilityDSD.values[0], ceAlgorithmsResults, deltaEquals);
+        assertEquals(utilityDSD.getValues()[0], ceAlgorithmsResults, deltaEquals);
         results.add(result);
         
     }
@@ -293,7 +293,7 @@ public class InferenceTimeCEA {
                 
                 try {
                     // Check that the result of both unicriterion algorithms are the same
-                    assertArrayEquals(utilityDSD.values, utilityDT.values, deltaEquals);
+                    assertArrayEquals(utilityDSD.getValues(), utilityDT.getValues(), deltaEquals);
                 } catch (AssertionError err) {
                     LogManager.getLogger()
                               .error("Unicriterion utilities are different for lambda = " + lambda + ". " + err
@@ -302,14 +302,14 @@ public class InferenceTimeCEA {
                 
                 try {
                     // Check that the result obtained for CE algorithms and Unicriterion algorithms are the same
-                    assertEquals(utilityDSD.values[0], cepDSD.getEffectiveness(lambda) * lambda - cepDSD.getCost(lambda), deltaEquals);
+                    assertEquals(utilityDSD.getValues()[0], cepDSD.getEffectiveness(lambda) * lambda - cepDSD.getCost(lambda), deltaEquals);
                 } catch (AssertionError err) {
                     LogManager.getLogger()
                               .error("DSD CEP are not equal to unicriterion case for lambda = " + lambda + ". " + err.getMessage());
                 }
                 
                 try {
-                    assertEquals(utilityDSD.values[0], cepDT.getEffectiveness(lambda) * lambda - cepDT.getCost(lambda), deltaEquals);
+                    assertEquals(utilityDSD.getValues()[0], cepDT.getEffectiveness(lambda) * lambda - cepDT.getCost(lambda), deltaEquals);
                 } catch (AssertionError err) {
                     LogManager.getLogger()
                               .error("DT CEP are not equal to unicriterion case for lambda = " + lambda + ". " + err.getMessage());
