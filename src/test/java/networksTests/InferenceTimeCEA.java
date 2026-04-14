@@ -366,7 +366,7 @@ public class InferenceTimeCEA {
     */
     
     @AfterEach
-    public void onTestsEnd() throws IOException {
+    public void onTestsEnd() {
         //saveResultsToXSLX();
     }
     
