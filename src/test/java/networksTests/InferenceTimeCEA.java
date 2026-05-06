@@ -27,7 +27,6 @@ import org.openmarkov.io.probmodel.reader.PGMXReader_0_2;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -73,10 +72,10 @@ public class InferenceTimeCEA {
         );
         var networks = new ArrayList<ProbNetContents>(networkNames.size());
         for (String networkName : networkNames) {
-            InputStream file = new IntegrationTest().getClass()
+            var file = new IntegrationTest().getClass()
                                                     .getClassLoader()
-                                                    .getResourceAsStream(path + networkName);
-            ProbNetInfo probNetInfo = pgmxReader.loadProbNetInfo(networkName, file);
+                                            .getResource(path + networkName);
+            ProbNetInfo probNetInfo = pgmxReader.read(file);
             ProbNet probNet = probNetInfo.getProbNet();
             networks.add(new ProbNetContents(networkName, probNet, probNetInfo));
         }
