@@ -22,6 +22,7 @@ import org.openmarkov.inference.algorithm.decompositionIntoSymmetricDANs.ceanaly
 import org.openmarkov.inference.algorithm.decompositionIntoSymmetricDANs.evaluation.DANDecisionTreeEvaluation;
 import org.openmarkov.inference.algorithm.decompositionIntoSymmetricDANs.evaluation.DANDecompositionIntoSymmetricDANsEvaluation;
 import org.openmarkov.integrationTests.IntegrationTest;
+import org.openmarkov.io.probmodel.reader.PGMXReader;
 import org.openmarkov.io.probmodel.reader.PGMXReader_0_2;
 
 import java.io.File;
@@ -75,8 +76,8 @@ public class InferenceTimeCEA {
             var file = new IntegrationTest().getClass()
                                                     .getClassLoader()
                                             .getResource(path + networkName);
-            ProbNetInfo probNetInfo = pgmxReader.read(file);
-            ProbNet probNet = probNetInfo.getProbNet();
+            PGMXReader.NetworkAndEvidence probNetInfo = pgmxReader.read(file);
+            ProbNet probNet = probNetInfo.probNet();
             networks.add(new ProbNetContents(networkName, probNet, probNetInfo));
         }
         return networks.stream();
@@ -85,12 +86,12 @@ public class InferenceTimeCEA {
     @ParameterizedTest
     @MethodSource("networksToTest")
     public void dansTEST(ProbNetContents networkContents) throws Exception {
-        ProbNetInfo probNetInfo = networkContents.probNetInfo;
+        PGMXReader.NetworkAndEvidence probNetInfo = networkContents.probNetInfo;
         ProbNet probNet = networkContents.probNet;
         
-        EvidenceCase evidenceCase = probNetInfo.getEvidence().isEmpty() ?
+        EvidenceCase evidenceCase = probNetInfo.evidence().isEmpty() ?
                 new EvidenceCase() :
-                probNetInfo.getEvidence().get(0);
+                probNetInfo.evidence().get(0);
         
         for (Criterion criterion : probNet.getDecisionCriteria()) {
             LogManager.getLogger()
@@ -188,12 +189,12 @@ public class InferenceTimeCEA {
     @MethodSource("networksToTest")
     public void checkCEPThresholdsWithUnicreterionAnalysis(ProbNetContents networkContents) throws Exception {
         double precision = Math.pow(10, 4);
-        ProbNetInfo probNetInfo = networkContents.probNetInfo;
+        PGMXReader.NetworkAndEvidence probNetInfo = networkContents.probNetInfo;
         ProbNet probNet = networkContents.probNet;
         String networkName = probNet.getName();
-        EvidenceCase evidenceCase = probNetInfo.getEvidence().isEmpty() ?
+        EvidenceCase evidenceCase = probNetInfo.evidence().isEmpty() ?
                 new EvidenceCase() :
-                probNetInfo.getEvidence().get(0);
+                probNetInfo.evidence().get(0);
         
         /**
          * If multicriteria
@@ -406,7 +407,7 @@ public class InferenceTimeCEA {
         
     }
     
-    record ProbNetContents(String filename, ProbNet probNet, ProbNetInfo probNetInfo) {
+    record ProbNetContents(String filename, ProbNet probNet, PGMXReader.NetworkAndEvidence probNetInfo) {
     }
     
     /**
